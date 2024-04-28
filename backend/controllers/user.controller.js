@@ -1,14 +1,15 @@
-import User from '../models/user.model.js';
-import Notification from '../models/notification.model.js';
 import bcrypt from 'bcryptjs';
 import { v2 as cloudinary } from 'cloudinary';
+
+import Notification from '../models/notification.model.js';
+import User from '../models/user.model.js';
 
 export const getUserProfile = async (req, res) => {
 	const { username } = req.params;
 
 	try {
 		const user = await User.findOne({ username }).select('-password');
-		if (!user) return res.status(404).json({ error: 'User not found' });
+		if (!user) return res.status(404).json({ message: 'User not found' });
 
 		res.status(200).json(user);
 	} catch (error) {
@@ -27,19 +28,19 @@ export const followUnfollowUser = async (req, res) => {
 			return res.status(400).json({ error: "You can't follow/unfollow yourself" });
 		}
 
-		if (!userToModify || !currentUser) {
-			return res.status(400).json({ error: 'User not found' });
-		}
+		if (!userToModify || !currentUser) return res.status(400).json({ error: 'User not found' });
 
 		const isFollowing = currentUser.following.includes(id);
 
 		if (isFollowing) {
 			await User.findByIdAndUpdate(id, { $pull: { followers: req.user._id } });
 			await User.findByIdAndUpdate(req.user._id, { $pull: { following: id } });
+
 			res.status(200).json({ message: 'User unfollowed successfully' });
 		} else {
 			await User.findByIdAndUpdate(id, { $push: { followers: req.user._id } });
 			await User.findByIdAndUpdate(req.user._id, { $push: { following: id } });
+
 			const newNotification = new Notification({
 				type: 'follow',
 				from: req.user._id,
@@ -47,6 +48,7 @@ export const followUnfollowUser = async (req, res) => {
 			});
 
 			await newNotification.save();
+
 			res.status(200).json({ message: 'User followed successfully' });
 		}
 	} catch (error) {
@@ -87,6 +89,7 @@ export const updateUser = async (req, res) => {
 	let { profileImg, coverImg } = req.body;
 
 	const userId = req.user._id;
+
 	try {
 		let user = await User.findById(userId);
 		if (!user) return res.status(404).json({ message: 'User not found' });
@@ -101,6 +104,7 @@ export const updateUser = async (req, res) => {
 			if (newPassword.length < 6) {
 				return res.status(400).json({ error: 'Password must be at least 6 characters long' });
 			}
+
 			const salt = await bcrypt.genSalt(10);
 			user.password = await bcrypt.hash(newPassword, salt);
 		}
@@ -109,13 +113,16 @@ export const updateUser = async (req, res) => {
 			if (user.profileImg) {
 				await cloudinary.uploader.destroy(user.profileImg.split('/').pop().split('.')[0]);
 			}
+
 			const uploadedResponse = await cloudinary.uploader.upload(profileImg);
 			profileImg = uploadedResponse.secure_url;
 		}
+
 		if (coverImg) {
 			if (user.coverImg) {
 				await cloudinary.uploader.destroy(user.coverImg.split('/').pop().split('.')[0]);
 			}
+
 			const uploadedResponse = await cloudinary.uploader.upload(coverImg);
 			coverImg = uploadedResponse.secure_url;
 		}
